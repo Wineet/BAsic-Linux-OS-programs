@@ -1,0 +1,3 @@
+Task: Create a process which will create/launch two more process. created two process should print "P1:I am alive" (ex: process1) 5 times. and then exit. After exit of two process only Launching process main should exit by printing ("bye bye").
+
+If any exception occur, main as well as two created process should be dead

@@ -1,0 +1,11 @@
+
+One program(fifo_p1.c) continuesly read from FIFO and print on terminal,
+Another program(fifo_p2.c) take command line argument and write to FIFO.
+
+
+In case of FIFO it is synchronised by "open" blockable call back.
+After read or write operation need to close file and again open for next operation
+to achieve blocking nature other wise it continuesly runs if try to read again
+before closing.
+
+Need to take care for atomic "write" operations

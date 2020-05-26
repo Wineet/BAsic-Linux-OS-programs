@@ -1,0 +1,6 @@
+Problem Statement: take three Global variables as (global_var1, global_var2, global_var3 ) of type unsigned long int. initial value is zero. Create 4 threads in one process. first two thread will increment these four variables 65535 times. Later two threads will decrement these four variables 65535 times.
+Obtain race condition.  Main process should have two thread subroutines only one for increment and one for decrement both should be re-entrant.
+
+At the end of each thread print variable values.
+
+Note: to be clear two threads will executing the same subroutine(Increment/decrement) which is re-entrant.	

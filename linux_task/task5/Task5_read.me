@@ -1,0 +1,10 @@
+Problem Statement: take three Global variables as (global_var1, global_var2, global_var3 ) of type unsigned long int. initial value is zero. Create 2 threads and  two  process.in each one thread will increment these four variables 65535 times and second  threads will decrement these four variables 65535 times. same will happen in another process too.
+Variables must be placed In shared Memory between two process
+race condition may come.  Process among them will keep semaphore lock to acquire shared memory resources
+and In process Threads Mutex lock should be held to avoide racecondition among thread operations
+
+At the end of both process  print variable values.
+
+Note:
+
+output should be the default assigned value of Global variables
