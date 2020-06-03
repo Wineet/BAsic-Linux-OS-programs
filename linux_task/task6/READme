@@ -1,0 +1,5 @@
+Problem Statement: 
+Create a Pipe between Parent and child. 
+when Parent will send "GO" message to the child via PIPE child should
+start to Execute the code and print "I am Child " 5 Times and Exit.
+after child exit parents should get terminated.
