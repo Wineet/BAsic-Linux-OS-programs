@@ -1,0 +1,7 @@
+Problem Statement: 
+Make a dummy Program which prints "Hello World" after every one second. 
+while you are getting prints on terminal if you press "ctrl+c" program should Not terminate it should Work as normal Only.
+
+Hint: 
+Register a Handler to Linux Signal which will invoke when signal arrive.
+to generate signal you can use top
