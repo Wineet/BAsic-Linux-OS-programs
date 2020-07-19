@@ -1,0 +1,6 @@
+
+Motion Sensor Polling Stop In between If any thing Harm happend
+Not able to Stop Now because Polling is going in case and We are
+Not reading Pipe
+
+/* Need to Monitor Global Varible*/
