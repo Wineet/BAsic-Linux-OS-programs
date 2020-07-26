@@ -4,3 +4,7 @@ Not able to Stop Now because Polling is going in case and We are
 Not reading Pipe
 
 /* Need to Monitor Global Varible*/
+
+
+Door monitoring Happening after 30sec Only when Door Bell Rings
+

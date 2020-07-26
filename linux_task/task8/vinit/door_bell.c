@@ -19,7 +19,7 @@
  * 		If Any thing Goes Wrong Will Update Status Variable
  *
  * 				              | |
- * 	                                      | | Thread 1 and thread 2 communicate With Pipe IPC channel
+ * 	                                      | | Thread 1 and thread 2 and Thread 3 receive Message From Monitor by Pipe IPC channel
  * 	                                      | |
  * Thread2 >>						  		( Not Used Queue Because No Continues Request can Occure )
  *		Distance calculator Thread 
@@ -27,11 +27,11 @@
  * 		If Any thing Goes Wrong Will Update Status Variable
  *
  *					      | |
- *					      | | Thread 2 and Thread 3 communicates with Pipe IPC Channel		  
+ *					      | |  Thread 1 and thread 2 and Thread 3 receive Message From Monitor by Pipe IPC channel 
  *					      |	|	  
  * Thread3 >>						  
  *		Door Bell Thread			  
- *		holds 2.5 sec timer forDoor Bell ring then update the status
+ *		holds 3 sec timer forDoor Bell ring then update the status
  * 		If Any thing Goes Wrong Will Update Status Variable
  *		On sucess case also it will trigger thread 4
  *							  
@@ -61,30 +61,20 @@
 #define _GNU_SOURCE
 
 #include <pthread.h>
+#include <signal.h>
+#include <time.h>
 #include <limits.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+
+/* project Specific Headers*/
+
 #include "door_bell.h"
-/* Global Macro Definiton Here */
+#include "door_bell_func.c"
+#include "door_timer.h"
 
-#define TRUE  1
-#define FALSE 0
-#define PIPE_READ 0
-#define PIPE_WRITE 1
-#define MAX_MESSAGE_SIZE 20
-
-
-#define DEBUG 1
- 
-#if DEBUG == 1
- 		#define dbug(arg,...) printf(arg,##__VA_ARGS__)
-#else
- 		#define dbug(arg,...)  
-
-
-#endif
-
-
+#define MIN_DISTANCE 4
+#define MAX_DISTANCE 8
 
 /*Global Variable Here*/
 
@@ -93,39 +83,122 @@ static int g_motionThread_running   =  FALSE;
 static int g_distanceThread_running =  FALSE;
 static int g_doorbellThread_running =  FALSE;
 
+static timer_t door_bell_timer_id      = 0;		// Door Bell Timer ID to ring the bell 2.5 sec
+static timer_t door_open_wait_timer_id = 0;		// 30 sec Door open Wait Timer
+static timer_t reset_states_timer_id   = 0;		// 10 Min timer if Door Doesn't Open after 3 times ringing
 
+static timer_state door_bell_flag   = NOT_RUNNING;
+static timer_state door_open_flag   = NOT_RUNNING;
+static timer_state reset_timer_flag = NOT_RUNNING;
 
+#if 0
+static timer_t dummy_timer_id = 0;
+void dummy_expiry_handler(union sigval arg)
+{
 
-/*
- * Resource related Data
- *
- * */
-static  int pipe_t1[2]={0};		// Motion Thread Pipe		// For Motion thread can be Config As Non Blocking
-static	int pipe_t2[2]={0};		// Distance Thread Pipe
-static	int pipe_t3[2]={0};		// Door Bell Thread Pipe
+	printf("Dummy Timer EXPIRED \n");
+	if( SUCCESS != timer_stop(dummy_timer_id) )
+	{
+		printf("Timer stop Failed\n");
+	
+	}
+	if(SUCCESS !=  timer_destroy(dummy_timer_id))
+	{
+		printf("TIMER Destroy Failed\n");
+	
+	}
+	
+}
+#endif
+void door_bell_expiry(union sigval arg);
+void door_open_wait_expiry(union sigval arg);
+void reset_states_timer_expiry(union sigval arg);
+static int door_wait_expiry_count =0;
 
-static  key_t const msgQueKey = 2000 ;  // Message queue Key
-static  int msgQ_Id = 0;
+void door_bell_expiry(union sigval arg)
+{
+	printf("Door Bell Timer Expiry\n");
+        door_bell_flag = NOT_RUNNING;
+	if( SUCCESS != timer_stop(door_bell_timer_id) )
+	{
+		printf("Timer stop Failed\n");	
+	}
+				char msg_buff[ MAX_MESSAGE_SIZE ] = {0};
+				strncpy(msg_buff,"RING_BELL_EXPIRY",MAX_MESSAGE_SIZE);
+				/*Informing Event to Distance Calculate  Thread */
+				if( FAIL == post_event( pipe_t3 , msg_buff, MAX_MESSAGE_SIZE ) )
+				{
+					printf("Mt: pipe Write Error %s\n",strerror(errno));
+				}
+				else
+				{
+					dbug("Timer Expiry Posted Event\n");
+				}
+		
 
+}
 
-/*Function Declaration Here*/
+void door_open_wait_expiry(union sigval arg)
+{
+	printf("Door open wait Timer Expiry\n");
+	event_data event_door_wait_expiry={0};	
+	door_open_flag = NOT_RUNNING;	
+ 	door_wait_expiry_count++;
 
-void* motion_detector_thread(void *);
-void* distance_calculator_thread(void *);
-void* door_bell_thread(void *);
-void* monitor_thread(void *);
+	if( SUCCESS != timer_stop(door_open_wait_timer_id) )
+	{
+		printf("Timer stop Failed\n");	
+	}
+	if( door_wait_expiry_count >= 3 )
+	{
+		printf("Maz retires Exceeded\n");
+		/* Start 10 min timer and End the sequece
+		 * And Restart the process
+		 *  Timer Will be started By Monitor thread
+		 * Let Monitor thread Know 
+		 * */
 
-read_data get_value(char *);
+			event_door_wait_expiry.msg_data.event = DOOR_WAIT_RETRY_END;
+			if(FAIL == post_messageToQ(event_door_wait_expiry))
+	     		{
+	    			printf("Md: Post Message to Q Failed");
+	     	 	 }
+	
+		return;
+	}
+			event_door_wait_expiry.msg_data.event = DOOR_WAIT_EXPIRY;
+			if(FAIL == post_messageToQ(event_door_wait_expiry))
+	     		{
+	    			printf("Md: Post Message to Q Failed");
+	     	 	 }
+				
 
-void shutdown(void);			// Closes all Open Resources
+}
+void reset_states_timer_expiry(union sigval arg)
+{
+	printf("reset states Timer Expiry\n");
+	char msg_buff[20]={0};
+	
+	reset_timer_flag = NOT_RUNNING;
+	if( SUCCESS != timer_stop(reset_states_timer_id) )
+	{
+		printf("Timer stop Failed\n");	
+	}
 
-status_t post_messageToQ(event_data );
-status_t get_messageFromQ(event_data *);
-status_t read_event(int * , char * , int );
-status_t post_event(int *,char * , int);
-status_t check_thread_alive(void);
+	/* Need to reset the states
+	 * And Move Back to Motion Command
+	 *
+	 * */
 
-event str_enum( char * );
+	strncpy(msg_buff,"MOTION_SCAN_ON",MAX_MESSAGE_SIZE);
+	/*Informing Event to Distance Calculate  Thread */
+	if( FAIL == post_event( pipe_t1 , msg_buff, MAX_MESSAGE_SIZE ) )
+	{
+		printf("Mt: pipe Write Error %s\n",strerror(errno));
+	}
+
+}
+
 
 int  main(int argc,char *argv[])
 {
@@ -216,23 +289,45 @@ int  main(int argc,char *argv[])
 		dbug("thread\"%d\" Created =%s\n",i,thread_list[i].threadName);
 	}	
     }
-#if 0
-    for now Commented
- g_monitorThread_running  = TRUE;
- g_motionThread_running   = TRUE;
- g_distanceThread_running = TRUE;
- g_doorbellThread_running = TRUE;
-#endif
- g_distanceThread_running = TRUE;
- g_monitorThread_running  = TRUE;
- g_motionThread_running   = TRUE;
- g_doorbellThread_running = TRUE;
- 
 
-pthread_exit(0);
+#if 0
+ 
+ g_monitorThread_running  = FALSE;
+ g_motionThread_running   = FALSE;
+ g_distanceThread_running = FALSE;
+ g_doorbellThread_running = FALSE;
+#endif
+
+ g_distanceThread_running = TRUE;
+ g_monitorThread_running  = TRUE;
+ g_motionThread_running   = TRUE;
+ g_doorbellThread_running = TRUE;
+
+#if 0 
+dummy_timer_id = tmr_create(dummy_expiry_handler ,"dummy");
+
+if( SUCCESS != timer_start( dummy_timer_id, 5) )
+{
+	printf("Dummy Timer start Failed \n");
+}
+#endif
+  door_bell_timer_id 	  = tmr_create (door_bell_expiry , "Ring_bell");
+  door_open_wait_timer_id = tmr_create (door_open_wait_expiry, "Door_Wait");
+  reset_states_timer_id   = tmr_create (reset_states_timer_expiry, "reset_states");
+
+if( 0 == door_bell_timer_id || 0 == door_open_wait_timer_id || 0 == reset_states_timer_id  )
+{
+	printf("Warn: TIMER Creation Failed\n");
+}
+
+ pthread_exit(0);
 return 0;
 }
 
+/*
+ * Motion Detector Thread
+ *
+ * */
 
 
 void* motion_detector_thread(void *thread_name)
@@ -312,6 +407,14 @@ dbug("Motion_");
  return NULL;
 }
 
+
+
+/*
+ * Distance Calculator Thread
+ *
+ * */
+
+
 void* distance_calculator_thread(void *thread_name)
 {
 	char *arg_name= (char *)thread_name;
@@ -345,10 +448,26 @@ void* distance_calculator_thread(void *thread_name)
 				 * If Distance is Invalid/Valid let know distance is valid
 				 *
 				 * */
-				dbug("%s = CALC_DISTANCE EVENT\n",thread_name);
-     	     			//event_dist.msg_data.event = INVALID_DISTANCE;
-				
-     	     			event_dist.msg_data.event = VALID_DISTANCE;
+				dbug("%s = CALC_DISTANCE EVENT\n",thread_name);	
+					read_data distance_data = get_value("file/distanceSensor.txt");	
+	 				dbug("distance value = %d distance status = %d\n",distance_data.value, distance_data.status);	
+					
+					if(distance_data.status == ECU_WORKING )
+					{
+						 if( distance_data.value >= MIN_DISTANCE && distance_data.value <= MAX_DISTANCE )
+						{
+     	     						event_dist.msg_data.event = VALID_DISTANCE;
+						}
+						else
+						{
+     	     						event_dist.msg_data.event = INVALID_DISTANCE;		
+						}	
+					}
+					else
+					{
+						event_dist.msg_data.event = ECU_NOT_WORKING;
+						
+					}
 	     			
 				if(FAIL == post_messageToQ(event_dist))
 	     			{
@@ -382,6 +501,11 @@ void* distance_calculator_thread(void *thread_name)
 return NULL;
 }
 
+
+/*
+ * Door Bell Thread
+ *
+ * */
 void* door_bell_thread(void *thread_name)
 {
 	char *arg_name= (char *)thread_name;
@@ -394,6 +518,8 @@ void* door_bell_thread(void *thread_name)
 	sleep(1);
 
 	char msg_buff[MAX_MESSAGE_SIZE] = {0};
+	event_data event_bell={0};
+
 	while( TRUE == g_doorbellThread_running )
 	{
 	
@@ -414,19 +540,32 @@ void* door_bell_thread(void *thread_name)
 			{
 				dbug("Door Bell: RING_BELL \n");
 				/*
-				 * Start 2.5 Second Timer For Door Bell Ring
+				 * Start 3 Second Timer For Door Bell Ring
 				 * It will post Event Back to Same thread 
 				 * */
+			
+				if( SUCCESS != timer_start( door_bell_timer_id, 3) )
+				{
+					printf("Dummy Timer start Failed \n");
+				}
 
-
-				/*Post Back value to queue*/
+				/*TIMER Expiry will Post Back to queue*/
 			break;	
 			}
 			
-			case RING_BELL_TIMER_EXPIRY:
+			case RING_BELL_EXPIRY:
 			{
 				dbug("Door Bell: RING_BELL_TIMER_EXPIRY \n");
 				/*Post Back value to queue*/	
+		     		
+				event_bell.msg_data.event = RING_BELL_EXPIRY;
+	     			
+				if(FAIL == post_messageToQ(event_bell))
+	     			{
+	     				printf("Db: Post Message to Q Failed");
+	     			}
+			
+
 			break;	
 			}
 			default:
@@ -444,6 +583,13 @@ void* door_bell_thread(void *thread_name)
 
 return NULL;
 }
+
+/*
+ * Monitor Thread
+ *
+ *
+ * */
+
 void* monitor_thread(void *thread_name)
 {
 	char *arg_name= (char *)thread_name;
@@ -516,11 +662,11 @@ void* monitor_thread(void *thread_name)
 			}
 			case INVALID_DISTANCE:
 			{
-				dbug("Monitor:INVALID DISTANCE EVENT");
+				dbug("Monitor:INVALID DISTANCE EVENT\n");
 					
 				strncpy(msg_buff,"MOTION_SCAN_ON",MAX_MESSAGE_SIZE);
 				/*Informing Event to Distance Calculate  Thread */
-				if( FAIL == post_event( pipe_t3 , msg_buff, MAX_MESSAGE_SIZE ) )
+				if( FAIL == post_event( pipe_t1 , msg_buff, MAX_MESSAGE_SIZE ) )
 				{
 					printf("Mt: pipe Write Error %s\n",strerror(errno));
 				}
@@ -528,7 +674,108 @@ void* monitor_thread(void *thread_name)
 			
 			break;
 			}	
-	
+			case RING_BELL_EXPIRY:
+			{
+				dbug("Monitor:RING_BELL_EXPIRY  EVENT\n");
+
+				/* Read Door Status Here*/
+
+					read_data door_data = get_value("file/doorStatus.txt");	
+	 				dbug("door value = %d door status = %d\n",door_data.value, door_data.status);	
+				if(door_data.value == DOOR_OPEN)
+				{
+					dbug("Door is OPENED\n");
+					/* Sleep Poll Until Door Get Closed */
+					
+					/*
+					 * Wait And Poll the Door Status To closed
+					 *  Once Door is Closed again Start 
+					 *  Motion Scan
+					 * */
+					do
+					{
+						 door_data = get_value("file/doorStatus.txt");	
+	 					 dbug("door value = %d door status = %d\n",door_data.value, door_data.status);			
+						 sleep(1);
+					}
+					while(door_data.value == DOOR_OPEN);
+
+					strncpy(msg_buff,"MOTION_SCAN_ON",MAX_MESSAGE_SIZE);
+					/*Informing Event to Distance Calculate  Thread */
+					if( FAIL == post_event( pipe_t1 , msg_buff, MAX_MESSAGE_SIZE ) )
+					{
+						printf("Mt: pipe Write Error %s\n",strerror(errno));
+					}
+						
+
+				}
+				else if(door_data.value == DOOR_CLOSED )
+				{
+					/* door is still  Closed Start the timer
+					 * start door wait timer 30 Sec
+					 */
+					dbug("Door IS CLOSED \n");
+ 
+					if( SUCCESS != timer_start( door_open_wait_timer_id, 30) )
+					{
+						printf("Door open wait Timer start Failed \n");
+					}	
+
+
+				}
+
+			break;
+			}
+			case ECU_NOT_WORKING:
+			{
+				dbug("Monitor: ECU_NOT_WORKING\n");
+				/*Need to reboot If Any ECU is Not Working*/	
+				
+				/*
+				 * Process Should Release Resource
+				 * And Reboot itself
+				 *
+				 * */
+
+			break;
+			}
+			case DOOR_WAIT_EXPIRY:
+			{
+				dbug("Monitor: DOOR_WAIT_EXPIRY\n");
+
+				strncpy(msg_buff,"RING_BELL",MAX_MESSAGE_SIZE);
+				/*Informing Event to Distance Calculate  Thread */
+				if( FAIL == post_event( pipe_t3 , msg_buff, MAX_MESSAGE_SIZE ) )
+				{
+					printf("Mt: pipe Write Error %s\n",strerror(errno));
+				}
+				
+#if 0				
+				  if( SUCCESS != timer_start( door_open_wait_timer_id, 30) )
+					{
+						printf("Door open wait Timer start Failed \n");
+					}
+#endif
+		
+			break;
+			}
+			case DOOR_WAIT_RETRY_END:
+			{
+				dbug("Monitor: DOOR_WAIT_RETRY_END\n");
+			
+				/*  Start 10 MIN Timer Here
+				 *
+				 * */
+
+
+				if( SUCCESS != timer_start( reset_states_timer_id, 10*60 ) )
+				{
+					printf("Reset Timer start Failed \n");
+				}
+
+
+			break;
+			}		
 			default:
 			printf("Db:Invalid Event in Monitor Thread \n");
 		
@@ -548,213 +795,4 @@ return NULL;
 }
 
 
-
-
-/* Function Call Definition */
-/*
- * Getting Input Value From File
- * read_data Object returned From Function call
- * */
-			
-read_data get_value(char *file_name)
-{
-	read_data data_val={0};
-
-	FILE * arg_file = NULL;
- 	if ( NULL == (arg_file = fopen(file_name,"r") ) )
-	{
-		printf("%s Fopen Error  %s\n",file_name, strerror(errno));
-		exit(1);
-	}	
-	
-	
-	if(0 == fread( &data_val.value,1,1,arg_file ))
-	{
-		printf("fread Error %s \n",file_name);
-		exit(1);
-	}
-	        data_val.value -=48;			// Ascii to Int Conversion
-
-	if( 0 != fseek(arg_file,2,SEEK_SET))
-	{
-		printf("Fseek Error %s\n",file_name);
-		exit(1);
-	
-	}
-
-	if(0 == fread( &data_val.status,1,1,arg_file ))
-	{
-		printf("fread Error %s \n",file_name);
-		exit(1);
-	}
-	data_val.status -=48;				//Ascii to Int Conversion
-
-	if(0 != fclose(arg_file))
-	{
-		printf("fclose Failed %s error=%s\n",file_name,strerror(errno));
-		exit(1);
-	}
-
- return data_val;
-}
-
-/*
- * status_t post_event();
- *
- * */
-status_t post_event(int *pipe_arg,char *msg_buff,int msg_size)
-{
-		if( -1 == write( pipe_arg[ PIPE_WRITE ] , msg_buff, msg_size ) )
-		{
-			printf("Mt: pipe Write Error %s\n",strerror(errno));
-			return FAIL;
-		}
-		else
-		{
-			return SUCCESS;
-		}
-
-}
-
-/*
- * status_t read_event(int *pipe_arg,char *msg_buff )
- * 
- *
- *
- * */
-
-status_t read_event(int *pipe_arg, char *msg_buff, int msg_size )
-{
-
-	    if(-1 == read( pipe_arg[PIPE_READ], msg_buff , msg_size ) )
-	    {
-	     	printf("Dt: Pipe read Error\n");
-	      return FAIL;
-	    }
-	    else
-	    {
-	    	return SUCCESS;
-	    }
-	
-}
-
-
-/*
- * Post Message to Queue
- *
- * status_t post_messageToQ( event_data );
- * 
- * Queue Posted by three threads except Monitor thread
- *
- * */
-status_t post_messageToQ(event_data event_arg)
-{
-
-	     event_arg.mtype = 1;		// This Element Needed Which Help at receving End
-						// If this is not present in structure send Error Will occure	     
-	     dbug("msgQId =%d\n",msgQ_Id);
-	    if(FAIL ==  msgsnd(msgQ_Id,&event_arg,(size_t)sizeof(msg_data),0) )
-	    {
-
-	    	printf("%d:warn: message Send Error %s\n",pthread_self(),strerror(errno));
-	    return FAIL;	
-	    }
-	    
-	return SUCCESS;
-}
-
-/*
- *
- * status_t get_messageFromQ(event_data *)
- *  Passing Argument will be address of Object
- *  Data will be Filled In object
- *
- *  status Will be returned SUCCESS or FAIL
- *
- *  Queue Will Be read By Monitor thread
- *
- *
- * */
-
-status_t get_messageFromQ(event_data *data_arg)
-{
-		// Clearning Object
-		memset(data_arg, 0 , sizeof(event_data) );
-
-		if (-1 == msgrcv(msgQ_Id, data_arg, sizeof(msg_data),0,0) )	// Always read First message of Queue
-		{
-			printf("warn: Message Read Error %s \n",strerror(errno));
-			return FAIL;
-		}
-
-	return SUCCESS;
-}
-
-/*
- * 
- *	status_t check_thread_alive(void);
- *     	Function work on linux ps command
- *     	it check thread is there or not in PS command
- *     	that way it knows threads are alive or not
- *
- *     	it may create File to store PS command
- *
- * */
-
-
-status_t check_thread_alive(void)
-{
-
-
-
-}
-
-
-/*
- * String to enum conversion function
- * Helpful for implementing Switch case
- * event str_enum(char * )
- *
- * */
-
-event str_enum( char *arg )
-{
-	if(arg == NULL)
-	{
-		return INVALID;
-	}
-
-	else if( 0 == strcmp(arg,"CALC_DISTANCE") )
-	{
-		return CALC_DISTANCE;
-	}
-	else if( 0 == strcmp(arg,"MOTION_SCAN_ON") )
-	{
-		return MOTION_SCAN_ON;
-	}
-	else if( 0 == strcmp(arg,"RING_BELL") )
-	{
-		return RING_BELL;
-	}
-	else
-	{
-		
-		return INVALID;
-	}
-}
-
-
-
-/*
- * shutdown()
- *
- * Stop all Process and releases the resources
- * */
-
-void shutdown()
-{
-
-	dbug("No shutdown implemented");
-
-}
 
