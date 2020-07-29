@@ -70,8 +70,8 @@
 /* project Specific Headers*/
 
 #include "door_bell.h"
-#include "door_bell_func.c"
 #include "door_timer.h"
+#include "door_bell_func.c"
 
 #define MIN_DISTANCE 4
 #define MAX_DISTANCE 8
@@ -83,14 +83,18 @@ static int g_motionThread_running   =  FALSE;
 static int g_distanceThread_running =  FALSE;
 static int g_doorbellThread_running =  FALSE;
 
-static timer_t door_bell_timer_id      = 0;		// Door Bell Timer ID to ring the bell 2.5 sec
-static timer_t door_open_wait_timer_id = 0;		// 30 sec Door open Wait Timer
-static timer_t reset_states_timer_id   = 0;		// 10 Min timer if Door Doesn't Open after 3 times ringing
-
 static timer_state door_bell_flag   = NOT_RUNNING;
 static timer_state door_open_flag   = NOT_RUNNING;
 static timer_state reset_timer_flag = NOT_RUNNING;
 
+
+thread_obj  thread_list[4]  = {
+	    			{ "monitor_thread"	, 0 , monitor_thread 			},
+				{ "motion_thread"	, 0 , motion_detector_thread		},
+				{ "Dist_thread" 	, 0 , distance_calculator_thread	},
+				{ "door_b_Thread"	, 0 , door_bell_thread			}
+   			  };
+ 
 #if 0
 static timer_t dummy_timer_id = 0;
 void dummy_expiry_handler(union sigval arg)
@@ -115,90 +119,6 @@ void door_open_wait_expiry(union sigval arg);
 void reset_states_timer_expiry(union sigval arg);
 static int door_wait_expiry_count =0;
 
-void door_bell_expiry(union sigval arg)
-{
-	printf("Door Bell Timer Expiry\n");
-        door_bell_flag = NOT_RUNNING;
-	if( SUCCESS != timer_stop(door_bell_timer_id) )
-	{
-		printf("Timer stop Failed\n");	
-	}
-				char msg_buff[ MAX_MESSAGE_SIZE ] = {0};
-				strncpy(msg_buff,"RING_BELL_EXPIRY",MAX_MESSAGE_SIZE);
-				/*Informing Event to Distance Calculate  Thread */
-				if( FAIL == post_event( pipe_t3 , msg_buff, MAX_MESSAGE_SIZE ) )
-				{
-					printf("Mt: pipe Write Error %s\n",strerror(errno));
-				}
-				else
-				{
-					dbug("Timer Expiry Posted Event\n");
-				}
-		
-
-}
-
-void door_open_wait_expiry(union sigval arg)
-{
-	printf("Door open wait Timer Expiry\n");
-	event_data event_door_wait_expiry={0};	
-	door_open_flag = NOT_RUNNING;	
- 	door_wait_expiry_count++;
-
-	if( SUCCESS != timer_stop(door_open_wait_timer_id) )
-	{
-		printf("Timer stop Failed\n");	
-	}
-	if( door_wait_expiry_count >= 3 )
-	{
-		printf("Maz retires Exceeded\n");
-		/* Start 10 min timer and End the sequece
-		 * And Restart the process
-		 *  Timer Will be started By Monitor thread
-		 * Let Monitor thread Know 
-		 * */
-
-			event_door_wait_expiry.msg_data.event = DOOR_WAIT_RETRY_END;
-			if(FAIL == post_messageToQ(event_door_wait_expiry))
-	     		{
-	    			printf("Md: Post Message to Q Failed");
-	     	 	 }
-	
-		return;
-	}
-			event_door_wait_expiry.msg_data.event = DOOR_WAIT_EXPIRY;
-			if(FAIL == post_messageToQ(event_door_wait_expiry))
-	     		{
-	    			printf("Md: Post Message to Q Failed");
-	     	 	 }
-				
-
-}
-void reset_states_timer_expiry(union sigval arg)
-{
-	printf("reset states Timer Expiry\n");
-	char msg_buff[20]={0};
-	
-	reset_timer_flag = NOT_RUNNING;
-	if( SUCCESS != timer_stop(reset_states_timer_id) )
-	{
-		printf("Timer stop Failed\n");	
-	}
-
-	/* Need to reset the states
-	 * And Move Back to Motion Command
-	 *
-	 * */
-
-	strncpy(msg_buff,"MOTION_SCAN_ON",MAX_MESSAGE_SIZE);
-	/*Informing Event to Distance Calculate  Thread */
-	if( FAIL == post_event( pipe_t1 , msg_buff, MAX_MESSAGE_SIZE ) )
-	{
-		printf("Mt: pipe Write Error %s\n",strerror(errno));
-	}
-
-}
-
 
 int  main(int argc,char *argv[])
 {
@@ -206,15 +126,8 @@ int  main(int argc,char *argv[])
 /* this array Keeps Track Of all created Threads
  *
  * */
-
     pthread_t thread_id[4] = {0};			
-    thread_obj  thread_list[4]  = {
-	    			{ "monitor_thread"	, 0 , monitor_thread 			},
-				{ "motion_thread"	, 0 , motion_detector_thread		},
-				{ "Dist_thread" 	, 0 , distance_calculator_thread	},
-				{ "door_b_Thread"	, 0 , door_bell_thread			}
-   			  };
-  
+ 
 
 #ifdef MORE_DEBUGGING
     for(int i=0;i<4;i++)
@@ -309,7 +222,7 @@ dummy_timer_id = tmr_create(dummy_expiry_handler ,"dummy");
 if( SUCCESS != timer_start( dummy_timer_id, 5) )
 {
 	printf("Dummy Timer start Failed \n");
-}
+}  reset_states_timer_id  door_open_wait_timer_id  door_bell_timer_id 
 #endif
   door_bell_timer_id 	  = tmr_create (door_bell_expiry , "Ring_bell");
   door_open_wait_timer_id = tmr_create (door_open_wait_expiry, "Door_Wait");
@@ -321,6 +234,17 @@ if( 0 == door_bell_timer_id || 0 == door_open_wait_timer_id || 0 == reset_states
 }
 
  pthread_exit(0);
+
+#if 0
+ while(/* Check if any Threads is dead */ )
+ {
+	if(conditon is true)
+	{
+		shutdown();
+
+	}
+ }
+#endif
 return 0;
 }
 
@@ -370,7 +294,17 @@ dbug("Motion_");
 				{
 					read_data motion_data = get_value("file/motionSensor.txt");	
 	 				dbug("motion value = %d motion status = %d\n",motion_data.value, motion_data.status);	
-	         			sleep(2);		 
+	         			sleep(2);	
+			       		if(motion_data.status != ECU_WORKING)
+					{
+						event_motion.msg_data.event = ECU_NOT_WORKING;	
+					  	  if(FAIL == post_messageToQ(event_motion))
+	     					  {
+	     						printf("Md: Post Message to Q Failed");
+	     					  }
+						
+						break;
+					}		
 		 			if(1 == motion_data.value )
 		 			{
 		 				/*
@@ -736,6 +670,7 @@ void* monitor_thread(void *thread_name)
 				 * And Reboot itself
 				 *
 				 * */
+				process_reboot();
 
 			break;
 			}
@@ -775,7 +710,8 @@ void* monitor_thread(void *thread_name)
 
 
 			break;
-			}		
+			}
+
 			default:
 			printf("Db:Invalid Event in Monitor Thread \n");
 		
@@ -794,5 +730,99 @@ void* monitor_thread(void *thread_name)
 return NULL;
 }
 
+
+
+
+
+
+/*
+ * Timer Expiry Handler Definition
+ *
+ * */
+
+
+void door_bell_expiry(union sigval arg)
+{
+	printf("Door Bell Timer Expiry\n");
+        door_bell_flag = NOT_RUNNING;
+	if( SUCCESS != timer_stop(door_bell_timer_id) )
+	{
+		printf("Timer stop Failed\n");	
+	}
+				char msg_buff[ MAX_MESSAGE_SIZE ] = {0};
+				strncpy(msg_buff,"RING_BELL_EXPIRY",MAX_MESSAGE_SIZE);
+				/*Informing Event to Distance Calculate  Thread */
+				if( FAIL == post_event( pipe_t3 , msg_buff, MAX_MESSAGE_SIZE ) )
+				{
+					printf("Mt: pipe Write Error %s\n",strerror(errno));
+				}
+				else
+				{
+					dbug("Timer Expiry Posted Event\n");
+				}
+		
+
+}
+
+void door_open_wait_expiry(union sigval arg)
+{
+	printf("Door open wait Timer Expiry\n");
+	event_data event_door_wait_expiry={0};	
+	door_open_flag = NOT_RUNNING;	
+ 	door_wait_expiry_count++;
+
+	if( SUCCESS != timer_stop(door_open_wait_timer_id) )
+	{
+		printf("Timer stop Failed\n");	
+	}
+	if( door_wait_expiry_count >= 3 )
+	{
+		printf("Maz retires Exceeded\n");
+		/* Start 10 min timer and End the sequece
+		 * And Restart the process
+		 *  Timer Will be started By Monitor thread
+		 * Let Monitor thread Know 
+		 * */
+
+			event_door_wait_expiry.msg_data.event = DOOR_WAIT_RETRY_END;
+			if(FAIL == post_messageToQ(event_door_wait_expiry))
+	     		{
+	    			printf("Md: Post Message to Q Failed");
+	     	 	 }
+	
+		return;
+	}
+			event_door_wait_expiry.msg_data.event = DOOR_WAIT_EXPIRY;
+			if(FAIL == post_messageToQ(event_door_wait_expiry))
+	     		{
+	    			printf("Md: Post Message to Q Failed");
+	     	 	 }
+				
+
+}
+void reset_states_timer_expiry(union sigval arg)
+{
+	printf("reset states Timer Expiry\n");
+	char msg_buff[20]={0};
+	
+	reset_timer_flag = NOT_RUNNING;
+	if( SUCCESS != timer_stop(reset_states_timer_id) )
+	{
+		printf("Timer stop Failed\n");	
+	}
+
+	/* Need to reset the states
+	 * And Move Back to Motion Command
+	 *
+	 * */
+
+	strncpy(msg_buff,"MOTION_SCAN_ON",MAX_MESSAGE_SIZE);
+	/*Informing Event to Distance Calculate  Thread */
+	if( FAIL == post_event( pipe_t1 , msg_buff, MAX_MESSAGE_SIZE ) )
+	{
+		printf("Mt: pipe Write Error %s\n",strerror(errno));
+	}
+
+}
 
 

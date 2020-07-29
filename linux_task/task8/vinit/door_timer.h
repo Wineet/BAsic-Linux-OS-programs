@@ -3,9 +3,14 @@ typedef enum timer_state{
 	NOT_RUNNING,
 	RUNNING
 
-
-
 }timer_state;
+
+
+static timer_t door_bell_timer_id      = 0;		// Door Bell Timer ID to ring the bell 2.5 sec
+static timer_t door_open_wait_timer_id = 0;		// 30 sec Door open Wait Timer
+static timer_t reset_states_timer_id   = 0;		// 10 Min timer if Door Doesn't Open after 3 times ringing
+
+
 /*
  * Timer Function
  *
@@ -137,5 +142,6 @@ status_t timer_destroy(timer_t timer_id)
 	}
 
 }
+
 
 

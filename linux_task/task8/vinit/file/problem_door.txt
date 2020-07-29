@@ -1,0 +1,4 @@
+
+1: Door status monitor Happens after every 30 Sec in between if door opened still it will be captured after one ring
+2: Number of reboot control Need to Implement
+3: Correct condition and sequence need to find out forsystem Shutdown

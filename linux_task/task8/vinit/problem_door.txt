@@ -8,3 +8,4 @@ Not reading Pipe
 
 Door monitoring Happening after 30sec Only when Door Bell Rings
 
+Number of reboot Limit also need to put

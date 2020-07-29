@@ -33,6 +33,8 @@
  * Resource related Data
  *
  * */
+
+
 	int pipe_t1[2]={0};		// Motion Thread Pipe		// For Motion thread can be Config As Non Blocking
 	int pipe_t2[2]={0};		// Distance Thread Pipe
 	int pipe_t3[2]={0};		// Door Bell Thread Pipe

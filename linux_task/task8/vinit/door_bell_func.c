@@ -19,9 +19,10 @@ status_t read_event(int * , char * , int );
 status_t post_event(int *,char * , int);
 status_t check_thread_alive(void);
 
+void shutdown(void);
 event str_enum( char * );
 
-
+extern thread_obj  thread_list[4]; 
 
 /* Function Call Definition */
 /*
@@ -224,6 +225,44 @@ event str_enum( char *arg )
 	}
 }
 
+
+/*
+ * void process_reboot()
+ *
+ * */
+
+void process_reboot()
+{
+	printf("***** Rebooting Process *****\n");
+	/* stop and Destroy Timers */
+       (void) timer_stop( reset_states_timer_id );
+       (void)  timer_stop( door_open_wait_timer_id );
+       (void)  timer_stop( door_bell_timer_id ); 
+
+       (void) timer_destroy( reset_states_timer_id);
+       (void)  timer_destroy( door_open_wait_timer_id);
+       (void)  timer_destroy(	door_bell_timer_id); 
+	
+/* Threads are Cancelled except Monitor thread */
+
+	for(int i=1;i<4;i++)
+	{
+		if(0 != pthread_cancel(thread_list[i].thread_id))
+		{
+			printf("thread cancel Failed\n");
+		}
+	}
+
+	if( -1 != execl("door_bell",NULL,NULL))
+	{
+		printf("Rebooting Failed Error: %s\n",strerror(errno));
+		exit(1);
+
+	}
+
+
+}
+
 /*
  * shutdown()
  *
@@ -233,7 +272,40 @@ event str_enum( char *arg )
 void shutdown()
 {
 
-	dbug("No shutdown implemented");
+	dbug(" shutdown implemented\n");
+
+	/* Close all holded resources
+	 * */
+
+	/* stop and Destroy Timers */
+       (void) timer_stop( reset_states_timer_id );
+       (void)  timer_stop( door_open_wait_timer_id );
+       (void)  timer_stop( door_bell_timer_id ); 
+
+       (void) timer_destroy( reset_states_timer_id);
+       (void)  timer_destroy( door_open_wait_timer_id);
+       (void)  timer_destroy(	door_bell_timer_id); 
+	
+	/* Threads are Cancelled */
+
+	for(int i=0;i<4;i++)
+	{
+		if(0 != pthread_cancel(thread_list[i].thread_id))
+		{
+			printf("thread cancel Failed\n");
+		}
+	}
+	/* stop and Destroy Timers */
+       (void) timer_stop( reset_states_timer_id );
+       (void)  timer_stop( door_open_wait_timer_id );
+       (void)  timer_stop( door_bell_timer_id ); 
+
+       (void) timer_destroy( reset_states_timer_id);
+       (void)  timer_destroy( door_open_wait_timer_id);
+       (void)  timer_destroy(	door_bell_timer_id); 
+	
+	printf("*********** System Shutdown *************\n");
+	exit(0);
 
 }
 
