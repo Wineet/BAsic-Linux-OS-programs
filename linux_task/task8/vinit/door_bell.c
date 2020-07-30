@@ -118,7 +118,7 @@ void door_bell_expiry(union sigval arg);
 void door_open_wait_expiry(union sigval arg);
 void reset_states_timer_expiry(union sigval arg);
 static int door_wait_expiry_count =0;
-
+status_t check_thread_dead(void); 
 
 int  main(int argc,char *argv[])
 {
@@ -233,17 +233,16 @@ if( 0 == door_bell_timer_id || 0 == door_open_wait_timer_id || 0 == reset_states
 	printf("Warn: TIMER Creation Failed\n");
 }
 
- pthread_exit(0);
+// pthread_exit(0);
 
-#if 0
- while(/* Check if any Threads is dead */ )
+#if 1
+/* If any thread Dies then system will shutdown*/
+ while( FAIL == check_thread_dead() )
  {
-	if(conditon is true)
-	{
-		shutdown();
-
-	}
+	sleep(1);		// To avoide continues polling
  }
+
+	shutdown();
 #endif
 return 0;
 }
@@ -826,3 +825,69 @@ void reset_states_timer_expiry(union sigval arg)
 }
 
 
+
+/* Check Thread alive Status
+ *
+ * status_t check_thread_dead()
+ * 
+ * If any thread Fails It sends TRUE other wise FALSE
+ *
+ * */
+
+
+status_t check_thread_dead()
+{
+	char ps_cmd[20]="ps -T -p";
+	char cmd[20];
+	char ps_cmd_output[500] = {0};
+	char file_char=0;
+	unsigned int process_id = (unsigned int)getpid();	
+	FILE * arg_file = NULL;
+
+	sprintf(cmd,"%s %u >ps_cmd.txt",ps_cmd,process_id);
+//dbug("ps_cmd=%s\n",cmd);
+
+ 	if ( NULL == (arg_file = fopen("ps_cmd.txt","r") ) )
+	{
+		printf("%s Fopen Error  %s\n","ps_cmd.txt", strerror(errno));
+		exit(1);
+	}		
+		system(cmd);
+
+	int i=0;
+	while( TRUE )
+	{
+		if(0 == fread(&file_char,1,1,arg_file ))
+		{
+			printf("%s End of File Reached \n","ps_cmd.txt");
+			break;
+		}
+
+		ps_cmd_output[i] = file_char;
+		i++;
+	}
+//printf("len = %d ps_output= %s\n", strlen(ps_cmd_output),ps_cmd_output);
+	
+	if( 0 != strstr("monitor_thread",ps_cmd_output) )
+	{
+		printf("monitor_thread  died\n");	
+	return SUCCESS;	// Means thread Failed
+	}
+	if( 0 != strstr("motion_detector_thread",ps_cmd_output))
+	{
+		printf("motion_detector_thread  died\n");	
+	return SUCCESS;	// Means thread Failed
+	}
+	if( 0 != strstr("Dist_thread",ps_cmd_output))
+	{
+		printf("Dist_thread  died\n");		
+	return SUCCESS;	// Means thread Failed
+	}
+	if( 0 != strstr("door_b_Thread",ps_cmd_output))
+	{	
+		printf("door_b_thread  died\n");	
+	return SUCCESS;	// Means thread Failed
+	}
+	
+return FAIL;
+}
