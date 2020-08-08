@@ -1,0 +1,50 @@
+
+R-pi Kernel Compiling
+Install Dependancy For Compilation
+
+$ sudo apt install git bc bison flex libssl-dev make libc6-dev libncurses5-dev
+
+
+Install Tool Chain
+
+$ git clone https://github.com/raspberrypi/tools ~/tools
+
+
+set path Variable 
+
+$ echo PATH=\$PATH:~/tools/arm-bcm2708/arm-linux-gnueabihf/bin >> ~/.bashrc
+source ~/.bashrc
+
+
+set Kernel Variable Depending On Hardware Board 
+ex: R-pi3+
+
+$ KERNEL=kernel7
+
+make Command to Compile source code
+
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- bcm2709_defconfig
+
+
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
+
+<zImage named image Will be created>
+
+
+Install Modules at Desired Location
+
+sudo env PATH=$PATH make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- INSTALL_MOD_PATH=mnt/ext4 modules_install
+
+
+sudo env PATH=$PATH make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- INSTALL_MOD_PATH=/media/asumth/rootfs/mnt/ext4 modules_install
+
+
+copy kernel image and require dtb file
+
+sudo cp arch/arm/boot/zImage mnt/fat32/$KERNEL.img
+sudo cp arch/arm/boot/dts/*.dtb mnt/fat32/
+sudo cp arch/arm/boot/dts/overlays/*.dtb* mnt/fat32/overlays/
+sudo cp arch/arm/boot/dts/overlays/README mnt/fat32/overlays/
+sudo umount mnt/fat32
+sudo umount mnt/ext4
+
