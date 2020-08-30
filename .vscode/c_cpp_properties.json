@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/cpp",
+            "cStandard": "gnu11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        },
+        {
+            "name": "my_config",
+            "includePath": [
+                "/usr/src/linux-headers-5.4.0-42-generic"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/cpp",
+            "cStandard": "gnu11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

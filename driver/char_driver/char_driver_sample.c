@@ -26,7 +26,7 @@
 #include<linux/fs.h>
 #include<linux/kdev_t.h>
 #include<linux/cdev.h>
-
+#include <linux/uaccess.h>      /* this is for copy_user vice vers*/
 MODULE_LICENSE("Dual BSD/GPL");
 
 /* Function Prototype */
@@ -113,25 +113,48 @@ static void setup_char_module(void)
 	printk("Registration Sucessful \n");
 
 }
+#define MAX_BUFF_SIZE 1024
+static char drv_buff[MAX_BUFF_SIZE];
 ssize_t scull_read(struct file *filp,char __user *buff,size_t count,loff_t *offp)
 {
-
-	return 0;
+	int bytes_read= -1;
+	int bytes_to_read=0;
+	int max_bytes=MAX_BUFF_SIZE - *offp;
+	if (count>max_bytes)
+		bytes_to_read=max_bytes;
+	else
+		bytes_to_read=count;
+	printk("read1:count =%d, bytes_read=%d , bytes_to_read=%d *offp =%d\n",count,bytes_read,bytes_to_read,*offp);
+	bytes_read=bytes_to_read-copy_to_user(buff,drv_buff+ *offp, bytes_to_read);
+	*offp+=bytes_read;
+	printk("read2:count =%d, bytes_read=%d , bytes_to_read=%d *offp =%d\n",count,bytes_read,bytes_to_read,*offp);
+	return bytes_read;
 }
 ssize_t scull_write(struct file *filp,const char __user *buff,size_t count,loff_t *offp)
 {
+	int bytes_write= -1;
+	int bytes_to_write=0;
+	int max_bytes=MAX_BUFF_SIZE - *offp;
+	if (count>max_bytes)
+		bytes_to_write=max_bytes;
+	else
+		bytes_to_write=count;
+	printk("write1:count =%d, bytes_write=%d , bytes_to_write=%d *offp =%d\n",count,bytes_write,bytes_to_write,*offp);
+	bytes_write=bytes_to_write-copy_from_user(drv_buff+ *offp,buff, bytes_to_write);
+	*offp+=bytes_write;
+	printk("write2:count =%d, bytes_write=%d , bytes_to_write=%d *offp =%d\n",count,bytes_write,bytes_to_write,*offp);
+	return bytes_write;
 
 	return 0;
 }
 int  scull_open(struct inode *inode,struct file *filp)
 {
-
+	printk(KERN_INFO "charDev : device opened succesfully\n");
 	return 0;
 }
 int scull_release(struct inode *inode,struct file *filp)
 {
-
-
+	   printk(KERN_INFO "charDev : device has been closed\n");
 	return 0;
 }
 
