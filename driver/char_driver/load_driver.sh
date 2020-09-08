@@ -1,5 +1,11 @@
 #/bin/bash
 
+if [ "$(id -u)" != "0" ]
+then
+	echo "Run script with \"sudo\" "
+	exit 1
+fi
+	
 if [ $# -ne 1 ]
 then
 	echo "Invalid Arguments"

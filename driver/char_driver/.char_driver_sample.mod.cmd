@@ -1,1 +1,0 @@
-cmd_/home/vinit/vinit/linux_repo/BAsic-Linux-OS-programs/driver/char_driver/char_driver_sample.mod := { echo  /home/vinit/vinit/linux_repo/BAsic-Linux-OS-programs/driver/char_driver/char_driver_sample.o; echo; } > /home/vinit/vinit/linux_repo/BAsic-Linux-OS-programs/driver/char_driver/char_driver_sample.mod
