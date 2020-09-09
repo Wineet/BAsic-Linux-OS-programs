@@ -301,8 +301,25 @@ module_exit(char_module_exit);
  *   Note For Handling Offset Pointer in read write 
  *   function Calls
  *
+Initially when read or write call back get invoked Offset is '0' so writing/reading happens from zero.
+to change the position of offset driver use lseek registered call back this happens when user process do seek operation.
+write/read function call back needs to return the number of bytes read/write. 
+
+specifically in case of write if we are returning zero, then it means write has not been performed, 
+kernel will retry again,eventually we will end up in write call back infinite loop.
+
+It is important in case of write always return number of bytes that was written to module,
+if number of bytes written are less than user buffer count then next write callback remaing are written.
+
+In case of read we must modify offset with number of bytes that got read, read will stop retrying when you return 0
+For consistent retry of reading/writing because of limitation of buffer, offset will be modifying,
+If we don't manage offset properly, we might end of continues read or write call backs or 
+in some cases it will create segmentation fault which may lead to kernel Panic.
+
+once number of bytes are written/read we must modify offset with Number of bytes written/read. 
+
  *
  *
+ *  
  *
- *
- * **********************************************/
+ ******************** END OF FILE *****************************/
