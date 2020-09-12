@@ -63,6 +63,7 @@ struct file_operations scull_fops={
 struct mydevice_data{
 
 	struct cdev cdev;
+	struct semaphore sem;	/*Mutual Exclusive semaphore*/
 	/*  further pointers need to store here
 	 * for data listing
 	 * */
@@ -76,7 +77,7 @@ struct mydevice_data{
  */
 module_param(my_name,charp,S_IRUGO);	
 
-struct mydevice_data dev_data,dev_data2;
+struct mydevice_data dev_data;
 static dev_t dev;
 static void setup_char_module(void)
 {
@@ -150,6 +151,13 @@ static void setup_char_module(void)
 	 	printk(KERN_ALERT"Cdev add Failed \n");
 		char_module_exit();
 	}
+
+	/* Semaphore initlisation Here
+	 * Initial value of semaphore is 1 
+	 */
+	sema_init(&dev_data.sem,1);
+
+
 #if 0
 	devno = MKDEV(MAJOR(dev),MINOR(dev) + 1);
 	cdev_init(&dev_data2.cdev,&scull_fops);
@@ -164,27 +172,31 @@ static void setup_char_module(void)
 	}
 #endif
 
-	kobject_uevent(&dev_data2.cdev.kobj,KOBJ_ADD);
+//	kobject_uevent(&dev_data2.cdev.kobj,KOBJ_ADD);
 	printk("Registration Sucessful \n");
 
 }
 
 /* Old Values Persist in this Module
  * Only Writing to buffer clears the Buffer
+ * Detiled comments are mentioned in write call
  * */
 ssize_t scull_read(struct file *filp,char __user *buff,size_t count,loff_t *offp)
 {
 	int bytes_read= -1;
 	int bytes_to_read=0;
+	struct mydevice_data *m_data = filp->private_data;	
 	int max_bytes=MAX_BUFF_SIZE - *offp;
 	if (count>max_bytes)
 		bytes_to_read=max_bytes;
 	else
 		bytes_to_read=count;
 	printk("read1:count =%d, bytes_read=%d , bytes_to_read=%d *offp =%d\n",count,bytes_read,bytes_to_read,*offp);
+	down(&m_data->sem);		// Semaphore Lock
 	bytes_read=bytes_to_read-copy_to_user(buff,drv_buff+ *offp, bytes_to_read);
 	*offp+=bytes_read;
 	printk("read2:count =%d, bytes_read=%d , bytes_to_read=%d *offp =%d\n",count,bytes_read,bytes_to_read,*offp);
+	up(&m_data->sem);		// Semaphore Un-Lock
 	return bytes_read;
 }
 /* scull_write
@@ -203,13 +215,15 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 
 	int bytes_write= -1;
 	int bytes_to_write=0;
+	/* programmer define structure obtained 
+	 * filp pointer is initlised in scull_open function call
+	 */
+	struct mydevice_data *m_data = filp->private_data;	
 	int max_bytes=MAX_BUFF_SIZE - *offp;
 	if (count>max_bytes)
 		bytes_to_write=max_bytes;
 	else
 		bytes_to_write=count;
-/* Clearing Buffer over writing Older Values */
-	memset(drv_buff,0,MAX_BUFF_SIZE);
 	printk("write1:count =%d, bytes_write=%d , bytes_to_write=%d *offp =%d\n",count,bytes_write,bytes_to_write,*offp);
 /* copy_from_user
  * arg1: Driver Buffer pointer
@@ -223,6 +237,9 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
  * return - On success it returns zero, If buffer is exceed then return Number of byte that can not be written
  *
  * */
+	down(&m_data->sem);		// Semaphore Lock
+/* Clearing Buffer over writing Older Values */
+	memset(drv_buff,0,MAX_BUFF_SIZE);
 	bytes_write=bytes_to_write-copy_from_user(drv_buff+ *offp,buff, bytes_to_write);
 /* Offset pointer 
  *
@@ -234,9 +251,8 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
  * */
 	*offp+=bytes_write;
 	printk("write2:count =%d, bytes_write=%d , bytes_to_write=%d *offp =%d\n",count,bytes_write,bytes_to_write,*offp);
+	up(&m_data->sem);		// Semaphore UnLock
 	return bytes_write;
-
-	return 0;
 }
 /*
  * inode structure is internally used by kernel
@@ -248,22 +264,27 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 
 int  scull_open(struct inode *inode,struct file *filp)
 {
+	struct mydevice_data *m_data;
 	printk(KERN_INFO "charDev : device opened succesfully\n");
 /*
  * iminor is a macro, helps to findout which device is invoked under Module
  * imajor is also a macro helpful to find out invoked module major number
  * */
 	printk(KERN_INFO"Minor No:%d, Major No:%d",iminor(inode),imajor(inode));
-
-
-	struct mydevice_data *m_data;
 /*
  * container_of
- * helps you to find out your device structure for kernel struct field pointer
- *
+ * helps you to find out your device structure for kernel struct field pointer 
+ * From Registered/initilised cdev structure obtained structure
+ * 
+ * by help of container_of macro we are able to find structure which has cdev strucure
+ * which we initilised earlier 
  * */
 	m_data=container_of(inode->i_cdev,struct mydevice_data,cdev);
+	/* filp file pointer passed to other call backs
+	 * In read write and seek call back you will be able to access
+	 */
 	filp->private_data=m_data;//useful for others call backs
+
 	return 0;
 }
 int scull_release(struct inode *inode,struct file *filp)
@@ -287,7 +308,7 @@ static void __exit char_module_exit(void)
 //	cdev_del(&dev_data2.cdev);
 
 	kobject_uevent(&dev_data.cdev.kobj,KOBJ_REMOVE);
-	kobject_uevent(&dev_data2.cdev.kobj,KOBJ_REMOVE);
+	//kobject_uevent(&dev_data2.cdev.kobj,KOBJ_REMOVE);
 	return;
 }
 
