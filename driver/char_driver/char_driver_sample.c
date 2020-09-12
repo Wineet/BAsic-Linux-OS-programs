@@ -260,6 +260,17 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
  *
  * inode has open device information in the i_cdev field
  * which contains cdev structure which we setup earlier
+ * 
+ * arg1:represents an in memory inode 
+          object, which is a common entity, in 
+          an active file - it is more popular
+          , in the context of other active files, 
+          like normal file's active or special 
+          device file's active file
+ * arg2: represents an object, in an 
+          active - this is known as "open file 
+          object" of "an active file"
+ *
  * */
 
 int  scull_open(struct inode *inode,struct file *filp)
