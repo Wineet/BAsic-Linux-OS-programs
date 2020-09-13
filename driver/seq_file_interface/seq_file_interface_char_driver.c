@@ -30,10 +30,11 @@
 #include<linux/init.h>
 #include<linux/kernel.h>
 #include<linux/module.h>
-#include<linux/proc_fs.h>		/* Proc fs interface */
-#include<linux/slab.h>			/* dynamic Memroy allocation */
-#include<linux/seq_file.h>		/* seq_file layer operations and interface*/
-#include<linux/list.h>			/* For linked List data structure*/
+#include<linux/proc_fs.h>		/* Proc fs interface 				*/
+#include<linux/slab.h>			/* dynamic Memroy allocation 			*/
+#include<linux/seq_file.h>		/* seq_file layer operations and interface	*/
+#include<linux/list.h>			/* For linked List data structure		*/
+#include<linux/version.h>		/* Linux kernel version Macro 			*/
 #include<linux/types.h>
 #include<linux/stat.h>
 #include<linux/fs.h>
@@ -97,8 +98,8 @@ module_param(my_name,charp,S_IRUGO);
 
 struct mydevice_data dev_data;
 static dev_t dev;
-static struct proc_dir_entry *proc_dir_ptr =NULL;
-
+static struct proc_dir_entry *proc_dir_ptr 	= NULL;
+static struct proc_dir_entry *proc_parent_dir	= NULL;
 
 
 /*
@@ -238,8 +239,20 @@ static void setup_char_module(void)
 	 * 
 	 * return type in struct proc_dir_entry *  
 	 * */
-	//proc_dir_ptr=create_proc_entry("seq_file",S_IRUSR,NULL);
-	proc_dir_ptr=create_proc("seq_file",S_IRUSR,NULL,&mydrv_proc_fops);
+
+	/* 
+	 * Below API is removed in kernel version 3.10 and above 
+	 * Please Use proc_create API for creating Entry
+	 *
+	 * create_proc_entry	Create/adds entry in proc virtual file system 
+	 * procfs is also known as psuedo file system
+	 * 
+	 * arg1: File name
+	 * arg2: File Permissions
+	 * arg3: parent Directory If passed NULL then default parent will be "/proc"
+	 * */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,10,0)
+	proc_dir_ptr=create_proc_entry("seq_file",S_IRUSR,NULL);
 	if(proc_dir_ptr != NULL)
 	{
 		/* After proc dir created under /proc 
@@ -247,10 +260,32 @@ static void setup_char_module(void)
 		 * registeration we need to do with pointer "proc_dir_ptr"
 		 * because it is an object pointing to proc dir file system
 		 * */
-		//proc_dir_ptr->proc_fops = &mydrv_proc_fops;
+		proc_dir_ptr->proc_fops = &mydrv_proc_fops;
 
 	}
-
+	else
+	{			
+		printk(KERN_ALERT"Proc Entry creation Failed\n");
+	}
+#else
+	/*
+	 * proc_mkdir "Create" directory and make entry in proc VFS (pseudo File system)
+	 * arg1: Directory Name
+	 * arg2: parent Directory, If NULL then parent direcotry will be "/proc" 
+	 * */
+	proc_parent_dir= proc_mkdir("seq_file",NULL);
+	/* proc_create "Create" File and make entry in proc VFS (pseudo File system)
+	 * arg1: file Name 
+	 * arg2: file Permissions
+	 * arg3: Parent Directory address/pointer, If NULL parent direcotry will be "NULL"
+	 * arg4: registered proc file operations address (struct file_operations )
+	 * */
+	proc_dir_ptr   = proc_create("seq_file",S_IRUSR,proc_parent_dir,&mydrv_proc_fops);
+	if(proc_dir_ptr == NULL)
+	{
+		printk(KERN_ALERT"Proc Entry creation Failed\n");
+	}
+#endif
 #if 0
 	devno = MKDEV(MAJOR(dev),MINOR(dev) + 1);
 	cdev_init(&dev_data2.cdev,&scull_fops);
@@ -301,11 +336,11 @@ ssize_t scull_read(struct file *filp,char __user *buff,size_t count,loff_t *offp
 		bytes_to_read=max_bytes;
 	else
 		bytes_to_read=count;
-	printk("read1:count =%d, bytes_read=%d , bytes_to_read=%d *offp =%d\n",count,bytes_read,bytes_to_read,*offp);
+	printk("read1:count =%u, bytes_read=%d , bytes_to_read=%d *offp =%lld\n",count,bytes_read,bytes_to_read,*offp);
 	down(&m_data->sem);		// Semaphore Lock
 	bytes_read=bytes_to_read-copy_to_user(buff,drv_buff+ *offp, bytes_to_read);
 	*offp+=bytes_read;
-	printk("read2:count =%d, bytes_read=%d , bytes_to_read=%d *offp =%d\n",count,bytes_read,bytes_to_read,*offp);
+	printk("read2:count =%u, bytes_read=%d , bytes_to_read=%d *offp =%lld\n",count,bytes_read,bytes_to_read,*offp);
 	up(&m_data->sem);		// Semaphore Un-Lock
 	return bytes_read;
 }
@@ -334,7 +369,7 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 		bytes_to_write=max_bytes;
 	else
 		bytes_to_write=count;
-	printk("write1:count =%d, bytes_write=%d , bytes_to_write=%d *offp =%d\n",count,bytes_write,bytes_to_write,*offp);
+	printk("write1:count =%u, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
 /* copy_from_user
  * arg1: Driver Buffer pointer
  * arg2: User Buffer
@@ -360,7 +395,7 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
  *
  * */
 	*offp+=bytes_write;
-	printk("write2:count =%d, bytes_write=%d , bytes_to_write=%d *offp =%d\n",count,bytes_write,bytes_to_write,*offp);
+	printk("write2:count =%u, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
 	up(&m_data->sem);		// Semaphore UnLock
 	return bytes_write;
 }
@@ -414,9 +449,9 @@ int scull_release(struct inode *inode,struct file *filp)
 	return 0;
 }
 
-/*********** Procfs Seq Call Back Defined Here ****************
+/*********** Procfs Seq Call Back Defined Here ****************/
 
-/* seq file interface open function call back*/
+/* seq file interface open function call back */
 static int mydrv_seq_open(struct inode *inode,struct file *filp)
 {
 	printk(KERN_INFO"mydrv_seq_open\n");
@@ -433,20 +468,23 @@ return seq_open(filp,&scull_seq_ops);
  static void *mydrv_seq_start (struct seq_file *s,loff_t *pos)
  {
 	 printk(KERN_INFO"mydrv_seq_start");
-
+	 return NULL;
  }
  static void *mydrv_seq_next (struct seq_file *s,void *v,loff_t *pos)
  {
 	 printk(KERN_INFO"mydrv_seq_next");
+	 return NULL;
  }
  void mydrv_seq_stop(struct seq_file *s,void *v)
  {
-	  printk(KERN_INFO"mydrv_seq_stop");
+	 printk(KERN_INFO"mydrv_seq_stop");
+	 return;
  }
  
  static int mydrv_seq_show(struct seq_file *s,void *v)
  {
-	  printk(KERN_INFO"mydrv_seq_show");
+	 printk(KERN_INFO"mydrv_seq_show");
+	 return 0;
  }
 
 
@@ -466,6 +504,10 @@ static void __exit char_module_exit(void)
 	unregister_chrdev_region(dev,2);
 	cdev_del(&dev_data.cdev);
 //	cdev_del(&dev_data2.cdev);
+
+	//Remove Proc Entry
+	remove_proc_entry("seq_file",proc_parent_dir);
+	remove_proc_entry("seq_file",NULL);
 
 	kobject_uevent(&dev_data.cdev.kobj,KOBJ_REMOVE);
 	//kobject_uevent(&dev_data2.cdev.kobj,KOBJ_REMOVE);
