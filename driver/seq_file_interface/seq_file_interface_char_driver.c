@@ -30,11 +30,11 @@
 #include<linux/init.h>
 #include<linux/kernel.h>
 #include<linux/module.h>
-#include<linux/proc_fs.h>		/* Proc fs interface 				*/
-#include<linux/slab.h>			/* dynamic Memroy allocation 			*/
+#include<linux/proc_fs.h>		/* Proc fs interface 						*/
+#include<linux/slab.h>			/* dynamic Memroy allocation 				*/
 #include<linux/seq_file.h>		/* seq_file layer operations and interface	*/
-#include<linux/list.h>			/* For linked List data structure		*/
-#include<linux/version.h>		/* Linux kernel version Macro 			*/
+#include<linux/list.h>			/* For linked List data structure			*/
+#include<linux/version.h>		/* Linux kernel version Macro 				*/
 #include<linux/types.h>
 #include<linux/stat.h>
 #include<linux/fs.h>
@@ -86,6 +86,7 @@ struct proc_debug_struct {
 /* List Head 
  * Linked List will be get initilised at compile time
  * Because of Below Macro
+ * Linked list type is Doubly Circular linked list
  * */
 static LIST_HEAD(mydrv_list_head);  
 /*
@@ -369,7 +370,7 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 		bytes_to_write=max_bytes;
 	else
 		bytes_to_write=count;
-	printk("write1:count =%u, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
+	printk("write1:count =%lu, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
 /* copy_from_user
  * arg1: Driver Buffer pointer
  * arg2: User Buffer
@@ -395,7 +396,7 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
  *
  * */
 	*offp+=bytes_write;
-	printk("write2:count =%u, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
+	printk("write2:count =%lu, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
 	up(&m_data->sem);		// Semaphore UnLock
 	return bytes_write;
 }
@@ -465,25 +466,120 @@ static int mydrv_seq_open(struct inode *inode,struct file *filp)
 return seq_open(filp,&scull_seq_ops);
 }
 
+//typically, it is 0, when navigation is started by a read()(first read) 
+//during run-time,*pos tells us where are we in the list access - 
+//specific object's index 
+//             in the list -
+//             the specific node in the list  
+
+//param1 is the object created for this active file in the 
+//sequence file layer - it may be used in our operations ' code 
+//
+//param2 is pointer to the offset field in the open file object of 
+//this active file - however, in this context it does not represent 
+//file logical byte no - instead, it represents index of the system 
+//object , in the system's data structure that is navigated, when 
+//this procfs file is accessed using an active file !!! in fact, when 
+//an active file of this procfs file is accessed/navigated/read, 
+//data from system objects maintained in the corresponding system 
+//data structure is retrieved and passed to user-space !!!
+//
+//system passes a *pos (offset/index of an object), as per the
+//current state of navigation/access !!! to start with the value will
+//be 0 - as one or more objects are navigated/accessed, this value will
+//be incremented - we must interpret this value, validate the value and
+//take appropriate actions, as per rules !!!
+//
+//as per rules, we must do the following, in xxx_seq_start() :
+//- using the *pos(index value), navigate related system data-structure
+//  and extract ptr to
+//  corresponding object 
+//- return ptr to the extracted object, if there is such object for
+//  the provided index !!!
+//- otherwise return NULL 
+//- all we need to code is the above rules and implement the same !!!
+
  static void *mydrv_seq_start (struct seq_file *s,loff_t *pos)
  {
+	 struct proc_debug_struct *p =NULL;
 	 printk(KERN_INFO"mydrv_seq_start");
-	 return NULL;
+	 /*Find Head Of linked List and send it further*/
+	 /*returns structre address of mentioned Node
+	  * arg1: pointer of node structure
+	  * arg2: List Head 
+	  * arg3: structure type
+	  */
+	  list_for_each_entry(p, &mydrv_list_head, list);
+	 /* In this case seq_file and Pos is not used*/
+	 
+	 return (void *)p;
  }
+ /* mydrv_seq_next it's main implementation is for traversing
+  * Unitl next returns NULL, " ..next->show->next->show.. "  loop will be running
+  *  void *v is a pointer returned by *start or previous *next function call back
+  * */
  static void *mydrv_seq_next (struct seq_file *s,void *v,loff_t *pos)
  {
+	 struct list_head  *p_list_head = ((struct proc_debug_struct *)v)->list.next;
+
 	 printk(KERN_INFO"mydrv_seq_next");
-	 return NULL;
+	 /* Will receive structure pointer from start or next
+	  * obtaine next node and send/return structre Pointer Further
+	  * If NULL returned means no more data is there to read 
+	  * It will invoke stop
+	  */
+   /* 'v' is a pointer to the iterator returned by start() or
+     by the previous invocation of next() 
+   * list.next is attribute for next list head,
+   * it's type "struct list_head" 
+   *  by getting this next head we can obtain next node  "struct proc_debug_struct" pointer
+   * and pass it to next call back *show
+   */
+
+	//example of list entry to understand function
+	//struct proc_debug_struct *next_node=list_entry(p_list_head,struct proc_debug_struct,list);		 
+
+  /* Due to Doubly Circular Linked list if come back to head
+   * then to exit the iterator call back returning NULL
+   * */
+	 return (p_list_head != &mydrv_list_head)?(list_entry(p_list_head,struct proc_debug_struct,list)):NULL;
  }
  void mydrv_seq_stop(struct seq_file *s,void *v)
  {
 	 printk(KERN_INFO"mydrv_seq_stop");
+	 /* If .next or .start returns NULL pointer
+	  * then stop will invoked
+	  * stop should do clean up activity
+	  *  */
 	 return;
  }
+ /* mydrv_seq_show sends data to user space
+  * printk sends data to system logs only
+  * use of seq* interface is preferred to transfer data to user space
+  * sequential file layer object is already Generated (struct seq_file), by using that object
+  * and seq interface function we can send data to user space
+  *
+  * */
  
  static int mydrv_seq_show(struct seq_file *s,void *v)
  {
-	 printk(KERN_INFO"mydrv_seq_show");
+	 struct proc_debug_struct *p = ((struct proc_debug_struct *)v);
+	
+	/* using seq_printf() we can pass info. to user space, via
+     * sequence file layer's kernel buffer !!!first data is copied
+     * into kernel buffer from the object of a subsystem or component !!
+
+    * kernel buffer is used with seq_printf(provided by sequence file layer)
+    * we are copying data from a current object of navigation into
+    * kernel buffer of *s
+	*/
+		 seq_printf(s,"info:%s",p->info);
+	 /* It will only print the data
+	  * No pointer data modification
+	  * return 0 means .show function call exectued properly
+	  * After Show iterator will invoke *next function call
+	  */
+	  printk(KERN_INFO"mydrv_seq_show %s",p->info);
 	 return 0;
  }
 
