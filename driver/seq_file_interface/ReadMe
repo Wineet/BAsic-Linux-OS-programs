@@ -1,0 +1,26 @@
+
+seq File interface ReadMe
+
+ Problem Statement: 
+  Design a simple Char driver with open release read write operations
+  Use the driver From user space to cross check the driver is working. Implement Seq_file Interface 
+  which will help to get driver debug data ex: how many byte data present in char driver buffer. 
+ 
+  add seq_file interface as a debug Mechanism for Driver. 
+  create file under /proc/seq_file directory proc will be as a parent Directory
+  In the proc File current number of bytes written in kernel buffer count will be there
+ 
+ create char driver Node under /dev directory which will do actual Char driver read write operations.
+ 
+  Note:
+  Linked List is created for a single Node only to get demo for Seq file iterations.
+  Node stores No valuable Data so as this Char Driver
+  
+  Comments are added all over Only For Educational Purpose
+ 
+ Implementation summary: 
+ 		Registered as Char Driver
+  		Two Device registered In the below Driver (Maintaining same buffer)
+  		For debugging printk is added
+ 		seq_file interface is added as a debug mechanism
+  		As debug Data Information Number of bytes written in Device is stored
