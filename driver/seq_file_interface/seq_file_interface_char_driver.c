@@ -17,6 +17,11 @@
  * In the proc File current number of bytes written in kernel buffer count will be there
  * 
  * Note:
+ * Linked List is created for a single Node only to get demo for Seq file iterations.
+ * Node stores No valuable Data so as this Char Driver
+ * 
+ * Data structre part is Bare minimum Used
+ *
  * Comments are added all over Only For Educational Purpose
  * It is not following any Kernel Coding Formats
  *
@@ -25,14 +30,15 @@
  * 		Two Device registered In the below Driver (Maintaining same buffer)
  * 		For debugging printk is added
  * 		seq_file interface is added as a debug mechanism
+ * 		As debug Data Information Number of bytes written in Device is stored
  * */
 
 #include<linux/init.h>
 #include<linux/kernel.h>
 #include<linux/module.h>
-#include<linux/proc_fs.h>		/* Proc fs interface 						*/
+#include<linux/proc_fs.h>		/* Proc fs interface 					*/
 #include<linux/slab.h>			/* dynamic Memroy allocation 				*/
-#include<linux/seq_file.h>		/* seq_file layer operations and interface	*/
+#include<linux/seq_file.h>		/* seq_file layer operations and interface		*/
 #include<linux/list.h>			/* For linked List data structure			*/
 #include<linux/version.h>		/* Linux kernel version Macro 				*/
 #include<linux/types.h>
@@ -79,8 +85,8 @@ struct mydevice_data{
 struct proc_debug_struct {
    /* ... */
    struct list_head list; /* Link to the next node */  //this is fixed for any type of struct to have iterator operation
-   char info[13];			// Store Node Number
-   char info1[10];         /* Info to pass via the procfs file (Storing Number Of bytes in drv_buffer) */
+   char info[23];			// Store Node Number
+   char info1[20];         /* Info to pass via the procfs file (Storing Number Of bytes in drv_buffer) */
    /* ... */
 };
 /* List Head 
@@ -157,6 +163,7 @@ static void setup_char_module(void)
 {
 	 int err, devno;
 	 struct proc_debug_struct *proc_list_node;
+	 struct proc_debug_struct *p = NULL;
 /* alloc_chrdev_region
  *
  * arg1: device Number varaible address
@@ -313,8 +320,12 @@ static void setup_char_module(void)
  * writing info with Generic string
  * info1 will be actual data which we need at debug time
  */
+
+
+
 	proc_list_node = kmalloc(sizeof(struct proc_debug_struct),GFP_KERNEL);
-	sprintf(proc_list_node->info,"List Node %d",1);
+	sprintf(proc_list_node->info,"List Node %d\n",1);
+	sprintf(proc_list_node->info1,"byte Count=%d\n",0);
 /* list_add_tail adds the node at the end of the list
  * and initilise adding node list pointer as null
  * mydrv_list_head is head of list, initilisation of list done by macro LIST_HEAD(mydrv_list_head)
@@ -361,6 +372,7 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 
 	int bytes_write= -1;
 	int bytes_to_write=0;
+	struct proc_debug_struct *p=NULL,*q=NULL;
 	/* programmer define structure obtained 
 	 * filp pointer is initlised in scull_open function call
 	 */
@@ -387,6 +399,7 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 /* Clearing Buffer over writing Older Values */
 	memset(drv_buff,0,MAX_BUFF_SIZE);
 	bytes_write=bytes_to_write-copy_from_user(drv_buff+ *offp,buff, bytes_to_write);
+
 /* Offset pointer 
  *
  * this pointer modification is mandatory other wise
@@ -398,6 +411,14 @@ ssize_t scull_write(struct file *filp, const char __user *buff, size_t count, lo
 	*offp+=bytes_write;
 	printk("write2:count =%lu, bytes_write=%d , bytes_to_write=%d *offp =%lld\n",count,bytes_write,bytes_to_write,*offp);
 	up(&m_data->sem);		// Semaphore UnLock
+
+
+	if(bytes_write > 0 && bytes_write<MAX_BUFF_SIZE)
+	{
+		list_for_each_entry(p,&mydrv_list_head,list);	//p is head Now
+		list_for_each_entry(q,p->list.next,list);	// Now q is next Node of structre type  where we will write Number of byte
+		sprintf(q->info1,"byte Count=%d\n",bytes_write);
+	}
 	return bytes_write;
 }
 /*
@@ -502,6 +523,7 @@ return seq_open(filp,&scull_seq_ops);
  static void *mydrv_seq_start (struct seq_file *s,loff_t *pos)
  {
 	 struct proc_debug_struct *p =NULL;
+	 loff_t off = 0;
 	 printk(KERN_INFO"mydrv_seq_start");
 	 /*Find Head Of linked List and send it further*/
 	 /*returns structre address of mentioned Node
@@ -509,10 +531,13 @@ return seq_open(filp,&scull_seq_ops);
 	  * arg2: List Head 
 	  * arg3: structure type
 	  */
+	 printk("seq_start pos=%d,off=%d\n",*pos,off);
 	  list_for_each_entry(p, &mydrv_list_head, list);
 	 /* In this case seq_file and Pos is not used*/
-	 
-	 return (void *)p;
+	 if(*pos == off++)
+	 	return (void *)p->list.next;
+	 else
+		 return NULL;
  }
  /* mydrv_seq_next it's main implementation is for traversing
   * Unitl next returns NULL, " ..next->show->next->show.. "  loop will be running
@@ -574,6 +599,7 @@ return seq_open(filp,&scull_seq_ops);
     * kernel buffer of *s
 	*/
 		 seq_printf(s,"info:%s",p->info);
+		 seq_printf(s,"%s",p->info1);
 	 /* It will only print the data
 	  * No pointer data modification
 	  * return 0 means .show function call exectued properly
@@ -596,7 +622,15 @@ static int __init char_module_init(void)
 
 static void __exit char_module_exit(void)
 {
+	struct proc_debug_struct *p=NULL,*n=NULL;
 	printk("char_module_exit \n");
+	/* Deleting All Entries Of list*/
+	list_for_each_entry_safe(p,n,&mydrv_list_head,list)
+	{
+		/*By this API no need to use list entry API*/
+		kfree(p);
+	}
+
 	unregister_chrdev_region(dev,2);
 	cdev_del(&dev_data.cdev);
 //	cdev_del(&dev_data2.cdev);
