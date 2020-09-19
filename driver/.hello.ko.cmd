@@ -1,1 +1,0 @@
-cmd_/home/pi/vinit/driver/hello.ko := ld -r  -EL -T ./scripts/module-common.lds -T ./arch/arm/kernel/module.lds  --build-id  -o /home/pi/vinit/driver/hello.ko /home/pi/vinit/driver/hello.o /home/pi/vinit/driver/hello.mod.o ;  true
