@@ -10,6 +10,9 @@
  * Statement: 
  * Design a simple Char driver with open release read write operations
  * Use the drvier From user space to cross check the driver
+ * 
+ * Implement simple Proc interface, form where we can read Values
+ * How many bytes wriiten to driver those will be stored
  *  
  * Note:
  * Comments are added all over Only For Educational Purpose
@@ -29,7 +32,9 @@
 #include<linux/fs.h>
 #include<linux/kdev_t.h>
 #include<linux/cdev.h>
-#include<linux/uaccess.h>      /* this is for copy_user vice vers*/
+#include<linux/uaccess.h>       /* this is for copy_user vice vers				*/
+#include<linux/proc_fs.h>		/* Proc fs interface 							*/
+#include<linux/seq_file.h>		/* seq_file layer operations and interface		*/
 /*General purpose licenese*/
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -42,6 +47,8 @@ ssize_t scull_read(struct file *filp,char __user *buff,size_t count,loff_t *offp
 ssize_t scull_write(struct file *filp,const char __user *buff,size_t count,loff_t *offp);
 int  scull_open(struct inode *inode,struct file *filp);
 int scull_release(struct inode *inode,struct file *filp);
+int proc_read_fun(char *buf,char **start,off_t offset,int count,int *eof,int *data);
+
 #define MAX_BUFF_SIZE 1024
 static char drv_buff[MAX_BUFF_SIZE];
 static char *my_name="Not_given";
@@ -60,6 +67,8 @@ struct file_operations scull_fops={
 	.release = scull_release,
 };
 
+
+
 struct mydevice_data{
 
 	struct cdev cdev;
@@ -76,9 +85,17 @@ struct mydevice_data{
  *  
  */
 module_param(my_name,charp,S_IRUGO);	
+struct proc_dir_entry *proc_parent_dir = NULL;
+struct proc_dir_entry *proc_dir_ptr	   = NULL;
 
 struct mydevice_data dev_data;
 static dev_t dev;
+int proc_read_fun(char *buf,char **start,off_t offset,int count,int *eof,int *data)
+{
+
+	return 0;
+}
+
 static void setup_char_module(void)
 {
 	 int err, devno;
@@ -175,7 +192,29 @@ static void setup_char_module(void)
 //	kobject_uevent(&dev_data2.cdev.kobj,KOBJ_ADD);
 	printk("Registration Sucessful \n");
 
+		/*
+	 * proc_mkdir "Create" directory and make entry in proc VFS (pseudo File system)
+	 * arg1: Directory Name
+	 * arg2: parent Directory, If NULL then parent direcotry will be "/proc" 
+	 * */
+
+	proc_parent_dir= proc_mkdir("seq_file",NULL);
+	/* proc_create "Create" File and make entry in proc VFS (pseudo File system)
+	 * arg1: file Name 
+	 * arg2: file Permissions
+	 * arg3: Parent Directory address/pointer, If NULL parent direcotry will be "NULL"
+	 * arg4: registered proc file operations address (struct file_operations )
+	 * */
+
+	proc_dir_ptr   = proc_create("seq_file",S_IRUSR,proc_parent_dir,&my_proc_read);
+	if(proc_dir_ptr == NULL)
+	{
+		printk(KERN_ALERT"Proc Entry creation Failed\n");
+	}
+
+
 }
+
 
 /* Old Values Persist in this Module
  * Only Writing to buffer clears the Buffer

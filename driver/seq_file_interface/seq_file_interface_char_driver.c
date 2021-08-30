@@ -157,7 +157,11 @@ static struct seq_operations scull_seq_ops = {
    .stop   = mydrv_seq_stop,
    .show   = mydrv_seq_show,
 };
+int proc_read_fun(char *buf,char **start,off_t offset,int count,int *eof,int *data)
+{
 
+	return 0;
+}
 
 static void setup_char_module(void)
 {
@@ -293,6 +297,8 @@ static void setup_char_module(void)
 	{
 		printk(KERN_ALERT"Proc Entry creation Failed\n");
 	}
+		proc_dir_ptr->owner=THIS_MODULE;
+	//proc_dir_ptr->read_proc ;
 #endif
 #if 0
 	devno = MKDEV(MAJOR(dev),MINOR(dev) + 1);
