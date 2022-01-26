@@ -45,17 +45,16 @@ void main(int argc,char *argv[])
 		exit(EXIT_FAILURE);
 
 	}
-
-	
-		ret_val=write(file_fd,argv[1],20);		// Max Size is 20 in our case
+	char count[20]={0};
+	int count_num=0;
+		ret_val=write(file_fd,argv[1],strlen(argv[1]));		// Max Size is 20 in our case
 								// Read is a blockable API
 		if(-1 == ret_val)
 		{
 			printf("Read Fail %s\n",strerror(ret_val));
 			exit(EXIT_FAILURE);
 		}
-	
-	
+		
 	close(file_fd);
 
 
