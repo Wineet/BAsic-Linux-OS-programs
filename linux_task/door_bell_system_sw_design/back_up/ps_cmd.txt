@@ -1,0 +1,7 @@
+    PID    SPID TTY          TIME CMD
+  11629   11629 pts/0    00:00:00 door_bell
+  11629   11632 pts/0    00:00:00 monitor_thread
+  11629   11633 pts/0    00:00:00 motion_thread
+  11629   11634 pts/0    00:00:00 Dist_thread
+  11629   11635 pts/0    00:00:00 door_b_Thread
+  11629   11636 pts/0    00:00:00 door_bell

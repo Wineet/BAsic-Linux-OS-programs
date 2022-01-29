@@ -1,7 +1,0 @@
-  PID  SPID TTY          TIME CMD
-17347 17347 pts/0    00:00:00 door_bell
-17347 17350 pts/0    00:00:00 monitor_thread
-17347 17351 pts/0    00:00:00 motion_thread
-17347 17352 pts/0    00:00:00 Dist_thread
-17347 17353 pts/0    00:00:00 door_b_Thread
-17347 17354 pts/0    00:00:00 door_bell
