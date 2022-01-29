@@ -1,28 +1,4 @@
-********* Task1 ********
+Linux OS Based Interview Task or Practice Question are Documented Here.
+All codes are compiled and Runned in Linux Ubuntu Test Envorment
 
-Task: Create a process which will create/launch two more process.
-      created two process should print "P1:I am alive" (ex: process1) 5 times. and then exit.
-      After exit of two process only Launching process main should exit by printing ("bye bye").
-
-If any exception occur, main as well as two created process should be dead
-
-
-
-******** Task2 *******
-
-Problem Statement: take three Global variables as (global_var1, global_var2, global_var3 ) of type unsigned long int. initial value is zero. Create 4 threads in one process. first two thread will increment these four variables 65535 times. Later two threads will decrement these four variables 65535 times.
-Obtain race condition.  Main process should have two thread subroutines only one for increment and one for decrement both should be re-entrant.
-
-At the end of each thread print variable values.
-
-Note: to be clear two threads will executing the same subroutine(Increment/decrement) which is re-entrant.
-
-******** Task3 *******
-
-
-
-******** Task4 *********
-
-
-
-******** Task5 ********
+Each Folder Has ReadMe to explain about Program in brief
